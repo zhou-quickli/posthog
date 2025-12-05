@@ -1,14 +1,15 @@
-from typing import Literal, Self
+from typing import Literal, Self, Union
 
 from langchain_core.runnables import RunnableConfig
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from posthog.models import Team, User
 
+from ee.hogai.chat_agent.query_executor.query_executor import execute_and_format_query
 from ee.hogai.chat_agent.sql.mixins import HogQLDatabaseMixin
 from ee.hogai.context.context import AssistantContextManager
 from ee.hogai.tool import MaxTool
-from ee.hogai.tool_errors import MaxToolFatalError
+from ee.hogai.tool_errors import MaxToolFatalError, MaxToolRetryableError
 from ee.hogai.utils.prompt import format_prompt_string
 from ee.hogai.utils.types.base import AssistantState, NodePath
 
@@ -33,6 +34,15 @@ You MUST use this tool when:
 - Working with SQL.
 - The request is about data warehouse, connected data sources, etc.
 
+# Insight
+
+Retrieves and optionally retrieves data for an existing insight by its ID.
+
+## Use this when:
+- You have an insight ID and want to retrieve the data for that insight or read the insight schema.
+- The user wants to see or discuss a specific saved insight.
+- You need to understand what an existing insight shows.
+
 {{{billing_prompt}}}
 """.strip()
 
@@ -41,22 +51,52 @@ The user does not have admin access to view detailed billing information. They w
 Suggest the user to contact the admins.
 """.strip()
 
-ReadDataKind = Literal["datawarehouse_schema"]
-ReadDataAdminAccessKind = Literal["datawarehouse_schema", "billing_info"]
+INSIGHT_NOT_FOUND_PROMPT = """
+The insight with the ID "{short_id}" was not found or uses an unsupported query type. Please verify the insight ID is correct.
+""".strip()
+
+
+class ReadDataWarehouseSchema(BaseModel):
+    """Returns the SQL ClickHouse schema for the user's data warehouse."""
+
+    kind: Literal["datawarehouse_schema"] = "datawarehouse_schema"
+
+
+class ReadInsight(BaseModel):
+    """Retrieves an existing saved insight by its short ID."""
+
+    kind: Literal["insight"] = "insight"
+    insight_id: str = Field(description="The short ID of the insight (found in URLs like /insights/abc123).")
+    execute: bool = Field(
+        default=False,
+        description="If true, executes the insight query and returns results. If false, returns only the insight definition.",
+    )
+
+
+class ReadBillingInfo(BaseModel):
+    """Retrieves billing information for the organization."""
+
+    kind: Literal["billing_info"] = "billing_info"
+
+
+ReadDataQuery = Union[ReadDataWarehouseSchema, ReadInsight]
+ReadDataAdminAccessQuery = Union[ReadDataWarehouseSchema, ReadInsight, ReadBillingInfo]
 
 
 class ReadDataToolArgs(BaseModel):
-    kind: ReadDataKind
+    query: ReadDataQuery = Field(..., discriminator="kind")
 
 
 class ReadDataAdminAccessToolArgs(BaseModel):
-    kind: ReadDataAdminAccessKind
+    query: ReadDataAdminAccessQuery = Field(..., discriminator="kind")
 
 
 class ReadDataTool(HogQLDatabaseMixin, MaxTool):
     name: Literal["read_data"] = "read_data"
     description: str = READ_DATA_PROMPT
-    context_prompt_template: str = "Reads user data created in PostHog (data warehouse schema, billing information)"
+    context_prompt_template: str = (
+        "Reads user data created in PostHog (data warehouse schema, saved insights, billing information)"
+    )
     args_schema: type[BaseModel] = ReadDataToolArgs
 
     @classmethod
@@ -94,13 +134,13 @@ class ReadDataTool(HogQLDatabaseMixin, MaxTool):
             context_manager=context_manager,
         )
 
-    async def _arun_impl(self, kind: ReadDataAdminAccessKind | ReadDataKind) -> tuple[str, None]:
-        match kind:
-            case "billing_info":
+    async def _arun_impl(self, query: dict) -> tuple[str, None]:
+        validated_query = ReadDataAdminAccessToolArgs(query=query).query
+        match validated_query:
+            case ReadBillingInfo():
                 has_access = await self._context_manager.check_user_has_billing_access()
                 if not has_access:
                     raise MaxToolFatalError(BILLING_INSUFFICIENT_ACCESS_PROMPT)
-                # used for routing
                 billing_tool = ReadBillingTool(
                     team=self._team,
                     user=self._user,
@@ -110,5 +150,25 @@ class ReadDataTool(HogQLDatabaseMixin, MaxTool):
                 )
                 result = await billing_tool.execute()
                 return result, None
-            case "datawarehouse_schema":
+            case ReadDataWarehouseSchema():
                 return await self._serialize_database_schema(), None
+            case ReadInsight() as schema:
+                return await self._read_insight(schema.insight_id, schema.execute), None
+
+    async def _read_insight(self, artifact_or_insight_id: str, execute: bool) -> str:
+        # First fetch the artifact content from the state messages
+        content = await self._context_manager.artifacts.aget_insight(self._state.messages, artifact_or_insight_id)
+
+        if content is None:
+            raise MaxToolRetryableError(INSIGHT_NOT_FOUND_PROMPT.format(short_id=artifact_or_insight_id))
+
+        query_type = content.query.kind
+        insight_name = content.name or f"Insight {artifact_or_insight_id}"
+        description_line = f"\nDescription: {content.description}" if content.description else ""
+
+        if execute:
+            results = await execute_and_format_query(self._team, content.query)
+            return f"# {insight_name}{description_line}\n\nQuery type: {query_type}\n\n{results}"
+
+        query_schema = content.query.model_dump_json(exclude_none=True)
+        return f"# {insight_name}{description_line}\n\nQuery type: {query_type}\n\nQuery definition:\n```json\n{query_schema}\n```"
