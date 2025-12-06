@@ -58,7 +58,8 @@ The insight with the ID "{short_id}" was not found or uses an unsupported query 
 """.strip()
 
 INSIGHT_RESULT_TEMPLATE = """
-# {{{insight_name}}}
+Name: {{{insight_name}}}
+Insight ID: {{{insight_id}}}
 {{#description}}
 Description: {{{description}}}
 {{/description}}
@@ -67,7 +68,8 @@ Description: {{{description}}}
 """.strip()
 
 INSIGHT_SCHEMA_TEMPLATE = """
-# {{{insight_name}}}
+Name: {{{insight_name}}}
+Insight ID: {{{insight_id}}}
 {{#description}}
 Description: {{{description}}}
 {{/description}}
@@ -199,6 +201,7 @@ class ReadDataTool(HogQLDatabaseMixin, MaxTool):
             text_result = format_prompt_string(
                 INSIGHT_SCHEMA_TEMPLATE,
                 insight_name=insight_name,
+                insight_id=artifact_or_insight_id,
                 description=content.description,
                 query_type=query_type,
                 query_schema=query_schema,
@@ -218,6 +221,7 @@ class ReadDataTool(HogQLDatabaseMixin, MaxTool):
         text_result = format_prompt_string(
             INSIGHT_RESULT_TEMPLATE,
             insight_name=insight_name,
+            insight_id=artifact_or_insight_id,
             description=content.description,
             query_type=query_type,
             results=results,
