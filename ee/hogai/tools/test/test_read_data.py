@@ -4,7 +4,7 @@ import pytest
 from posthog.test.base import BaseTest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from posthog.models import Insight
+from posthog.schema import ArtifactSource, AssistantTrendsEventsNode, AssistantTrendsQuery, VisualizationArtifactContent
 
 from ee.hogai.tool_errors import MaxToolRetryableError
 from ee.hogai.tools.read_data import (
@@ -15,6 +15,7 @@ from ee.hogai.tools.read_data import (
     ReadDataToolArgs,
 )
 from ee.hogai.utils.types import AssistantState
+from ee.hogai.utils.types.base import NodePath
 
 
 class TestReadDataTool(BaseTest):
@@ -106,106 +107,173 @@ class TestReadDataTool(BaseTest):
             mock_context_class.assert_called_once()
             assert tool is not None
 
-    async def test_read_insight_success(self):
+    async def test_read_insight_schema_only(self):
+        """Test reading an insight without executing it returns the schema."""
         team = MagicMock()
         user = MagicMock()
         state = AssistantState(messages=[], root_tool_call_id=str(uuid4()))
         context_manager = MagicMock()
         context_manager.check_user_has_billing_access = AsyncMock(return_value=False)
 
-        mock_insight = MagicMock(spec=Insight)
-        mock_insight.name = "Test Insight"
-        mock_insight.derived_name = None
-        mock_insight.description = "A test description"
-        mock_insight.query = {"source": {"kind": "TrendsQuery", "series": []}}
+        mock_query = AssistantTrendsQuery(series=[AssistantTrendsEventsNode(name="$pageview")])
+        mock_content = VisualizationArtifactContent(
+            name="Test Insight",
+            description="A test description",
+            query=mock_query,
+        )
 
-        with (
-            patch.object(Insight.objects, "aget", AsyncMock(return_value=mock_insight)),
-            patch("ee.hogai.tools.read_data.AssistantQueryExecutor") as mock_executor_class,
+        context_manager.artifacts = MagicMock()
+        context_manager.artifacts.aget_insight_with_source = AsyncMock(
+            return_value=(mock_content, ArtifactSource.INSIGHT)
+        )
+
+        tool = await ReadDataTool.create_tool_class(
+            team=team,
+            user=user,
+            state=state,
+            context_manager=context_manager,
+        )
+
+        result, artifact = await tool._arun_impl({"kind": "insight", "insight_id": "abc123", "execute": False})
+
+        assert "Test Insight" in result
+        assert "abc123" in result
+        assert "A test description" in result
+        assert "TrendsQuery" in result
+        assert artifact is None
+
+    async def test_read_insight_with_execution(self):
+        """Test reading an insight with execution returns results and artifact."""
+        team = MagicMock()
+        user = MagicMock()
+        tool_call_id = "test_call_id"
+        state = AssistantState(messages=[], root_tool_call_id=tool_call_id)
+        context_manager = MagicMock()
+        context_manager.check_user_has_billing_access = AsyncMock(return_value=False)
+
+        mock_query = AssistantTrendsQuery(series=[AssistantTrendsEventsNode(name="$pageview")])
+        mock_content = VisualizationArtifactContent(
+            name="Test Insight",
+            description="A test description",
+            query=mock_query,
+        )
+
+        context_manager.artifacts = MagicMock()
+        context_manager.artifacts.aget_insight_with_source = AsyncMock(
+            return_value=(mock_content, ArtifactSource.INSIGHT)
+        )
+
+        with patch(
+            "ee.hogai.tools.read_data.execute_and_format_query", new=AsyncMock(return_value="Formatted results")
         ):
-            mock_executor = MagicMock()
-            mock_executor.arun_and_format_query = AsyncMock(return_value=("Formatted results here", None))
-            mock_executor_class.return_value = mock_executor
-
-            tool = await ReadDataTool.create_tool_class(
+            tool = ReadDataTool(
                 team=team,
                 user=user,
                 state=state,
                 context_manager=context_manager,
+                node_path=(NodePath(name="test_node", tool_call_id=tool_call_id, message_id="test"),),
             )
 
-            result, artifact = await tool._arun_impl({"kind": "insight", "short_id": "abc123"})
+            result, artifact = await tool._arun_impl({"kind": "insight", "insight_id": "abc123", "execute": True})
 
-            assert "# Test Insight" in result
-            assert "Description: A test description" in result
-            assert "Query type: TrendsQuery" in result
-            assert "Formatted results here" in result
-            assert artifact is None
+            # When execute=True, returns empty string and artifact
+            assert result == ""
+            assert artifact is not None
+            assert len(artifact.messages) == 2
+
+            # First message is ArtifactRefMessage
+            artifact_ref = artifact.messages[0]
+            assert artifact_ref.artifact_id == "abc123"
+            assert artifact_ref.source == ArtifactSource.INSIGHT
+
+            # Second message is the tool call message with results
+            tool_call_msg = artifact.messages[1]
+            assert "Test Insight" in tool_call_msg.content
+            assert "Formatted results" in tool_call_msg.content
 
     async def test_read_insight_not_found(self):
+        """Test that not found insight raises MaxToolRetryableError."""
+        team = MagicMock()
+        user = MagicMock()
+        state = AssistantState(messages=[], root_tool_call_id=str(uuid4()))
+        context_manager = MagicMock()
+        context_manager.check_user_has_billing_access = AsyncMock(return_value=False)
+        context_manager.artifacts = MagicMock()
+        context_manager.artifacts.aget_insight_with_source = AsyncMock(return_value=None)
+
+        tool = await ReadDataTool.create_tool_class(
+            team=team,
+            user=user,
+            state=state,
+            context_manager=context_manager,
+        )
+
+        with pytest.raises(MaxToolRetryableError) as exc_info:
+            await tool._arun_impl({"kind": "insight", "insight_id": "nonexistent", "execute": False})
+
+        assert "nonexistent" in str(exc_info.value)
+
+    async def test_read_insight_default_execute_is_false(self):
+        """Test that execute defaults to False when not specified."""
         team = MagicMock()
         user = MagicMock()
         state = AssistantState(messages=[], root_tool_call_id=str(uuid4()))
         context_manager = MagicMock()
         context_manager.check_user_has_billing_access = AsyncMock(return_value=False)
 
-        with patch.object(Insight.objects, "aget", AsyncMock(side_effect=Insight.DoesNotExist)):
-            tool = await ReadDataTool.create_tool_class(
-                team=team,
-                user=user,
-                state=state,
-                context_manager=context_manager,
-            )
+        mock_query = AssistantTrendsQuery(series=[AssistantTrendsEventsNode(name="$pageview")])
+        mock_content = VisualizationArtifactContent(
+            name="Test Insight",
+            description=None,
+            query=mock_query,
+        )
 
-            with pytest.raises(MaxToolRetryableError) as exc_info:
-                await tool._arun_impl({"kind": "insight", "short_id": "nonexistent"})
+        context_manager.artifacts = MagicMock()
+        context_manager.artifacts.aget_insight_with_source = AsyncMock(
+            return_value=(mock_content, ArtifactSource.INSIGHT)
+        )
 
-            assert "nonexistent" in str(exc_info.value)
+        tool = await ReadDataTool.create_tool_class(
+            team=team,
+            user=user,
+            state=state,
+            context_manager=context_manager,
+        )
 
-    async def test_read_insight_no_query(self):
+        # Don't pass execute, it should default to False and return schema only
+        result, artifact = await tool._arun_impl({"kind": "insight", "insight_id": "abc123"})
+
+        assert artifact is None
+        assert "Test Insight" in result
+        assert "Query definition" in result
+
+    async def test_read_insight_uses_fallback_name_when_none(self):
+        """Test that insight name falls back to 'Insight {id}' when name is None."""
         team = MagicMock()
         user = MagicMock()
         state = AssistantState(messages=[], root_tool_call_id=str(uuid4()))
         context_manager = MagicMock()
         context_manager.check_user_has_billing_access = AsyncMock(return_value=False)
 
-        mock_insight = MagicMock(spec=Insight)
-        mock_insight.query = None
+        mock_query = AssistantTrendsQuery(series=[AssistantTrendsEventsNode(name="$pageview")])
+        mock_content = VisualizationArtifactContent(
+            name=None,
+            description=None,
+            query=mock_query,
+        )
 
-        with patch.object(Insight.objects, "aget", AsyncMock(return_value=mock_insight)):
-            tool = await ReadDataTool.create_tool_class(
-                team=team,
-                user=user,
-                state=state,
-                context_manager=context_manager,
-            )
+        context_manager.artifacts = MagicMock()
+        context_manager.artifacts.aget_insight_with_source = AsyncMock(
+            return_value=(mock_content, ArtifactSource.INSIGHT)
+        )
 
-            with pytest.raises(MaxToolRetryableError) as exc_info:
-                await tool._arun_impl({"kind": "insight", "short_id": "legacy123"})
+        tool = await ReadDataTool.create_tool_class(
+            team=team,
+            user=user,
+            state=state,
+            context_manager=context_manager,
+        )
 
-            assert "legacy123" in str(exc_info.value)
-            assert "does not have a query" in str(exc_info.value)
+        result, artifact = await tool._arun_impl({"kind": "insight", "insight_id": "abc123", "execute": False})
 
-    async def test_read_insight_unsupported_query_type(self):
-        team = MagicMock()
-        user = MagicMock()
-        state = AssistantState(messages=[], root_tool_call_id=str(uuid4()))
-        context_manager = MagicMock()
-        context_manager.check_user_has_billing_access = AsyncMock(return_value=False)
-
-        mock_insight = MagicMock(spec=Insight)
-        mock_insight.query = {"source": {"kind": "UnsupportedQueryType"}}
-
-        with patch.object(Insight.objects, "aget", AsyncMock(return_value=mock_insight)):
-            tool = await ReadDataTool.create_tool_class(
-                team=team,
-                user=user,
-                state=state,
-                context_manager=context_manager,
-            )
-
-            with pytest.raises(MaxToolRetryableError) as exc_info:
-                await tool._arun_impl({"kind": "insight", "short_id": "unsupported123"})
-
-            assert "unsupported123" in str(exc_info.value)
-            assert "UnsupportedQueryType" in str(exc_info.value)
+        assert "Insight abc123" in result
