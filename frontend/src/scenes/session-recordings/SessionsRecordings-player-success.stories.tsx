@@ -198,3 +198,43 @@ export const RecordingsPlayListWithPinnedRecordings: Story = {
 export const SecondRecordingInList: Story = {
     parameters: { pageUrl: sceneUrl(urls.replay(), { sessionRecordingId: recordings[1].id }) },
 }
+
+export const RecentRecordingsEmpty: Story = {
+    parameters: {
+        pageUrl: sceneUrl(urls.replay()),
+        waitForSelector: undefined,
+    },
+    decorators: [
+        mswDecorator({
+            get: {
+                '/api/environments/:team_id/session_recordings': () => [
+                    200,
+                    { has_next: false, results: [], version: '1' },
+                ],
+                '/api/projects/:team_id/session_recording_playlists': recordingPlaylists,
+                'api/projects/:team/notebooks': { count: 0, next: null, previous: null, results: [] },
+            },
+            post: {
+                '/api/environments/:team_id/query': () => [200, { results: [] }],
+            },
+        }),
+    ],
+}
+
+export const RecentRecordingsWide: Story = {
+    parameters: {
+        pageUrl: sceneUrl(urls.replay(), { sessionRecordingId: recordings[0].id }),
+        testOptions: {
+            viewport: { width: 1300, height: 720 },
+        },
+    },
+}
+
+export const RecentRecordingsNarrow: Story = {
+    parameters: {
+        pageUrl: sceneUrl(urls.replay(), { sessionRecordingId: recordings[0].id }),
+        testOptions: {
+            viewport: { width: 568, height: 1024 },
+        },
+    },
+}
