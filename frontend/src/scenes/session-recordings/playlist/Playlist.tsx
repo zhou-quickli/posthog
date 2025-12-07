@@ -196,7 +196,7 @@ export function Playlist({
         )
 
     return (
-        <div className="flex flex-col min-w-60">
+        <div className="flex flex-col min-w-60 h-full overflow-hidden">
             {!notebookNode && (
                 <DraggableToNotebook className="mb-2" href={urls.replay(ReplayTabs.Home, filters)}>
                     <RecordingsUniversalFiltersEmbedButton
@@ -210,10 +210,13 @@ export function Playlist({
             <div
                 ref={playlistRef}
                 data-attr="session-recordings-playlist"
-                className={clsx('Playlist w-full min-w-60 min-h-96', {
-                    'Playlist--wide': size !== 'small',
-                    'Playlist--embedded': embedded,
-                })}
+                className={clsx(
+                    'Playlist flex flex-row items-start justify-start h-full w-full min-w-60 min-h-96 overflow-hidden border rounded',
+                    {
+                        'Playlist--wide': size !== 'small',
+                        'Playlist--embedded border-0': embedded,
+                    }
+                )}
             >
                 <div
                     ref={playlistListRef}
@@ -234,7 +237,7 @@ export function Playlist({
                                 <LemonTableLoader loading={sessionRecordingsResponseLoading} />
                             </div>
                         </DraggableToNotebook>
-                        <div className="overflow-y-auto flex-1" onScroll={handleScroll} ref={contentRef}>
+                        <div className="overflow-y-auto flex-1 min-h-0" onScroll={handleScroll} ref={contentRef}>
                             {sectionCount > 1 ? (
                                 <LemonCollapse
                                     defaultActiveKeys={openSections}
