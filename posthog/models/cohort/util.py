@@ -527,7 +527,11 @@ def remove_person_from_static_cohort(person_uuid: uuid.UUID, cohort_id: int, *, 
 
 
 def get_static_cohort_size(*, cohort_id: int, team_id: int) -> int:
-    count = CohortPeople.objects.filter(cohort_id=cohort_id, person__team_id=team_id).count()
+    from django.db import router
+    from posthog.models.person import Person
+
+    db_read = router.db_for_read(Person) or "default"
+    count = CohortPeople.objects.using(db_read).filter(cohort_id=cohort_id, person__team_id=team_id).count()
 
     return count
 
