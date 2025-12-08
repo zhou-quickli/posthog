@@ -1975,6 +1975,12 @@ class LinkedinAdsTableKeywords(StrEnum):
     CAMPAIGNS = "campaigns"
 
 
+class LogPropertyFilterType(StrEnum):
+    LOG = "log"
+    LOG_ATTRIBUTE = "log_attribute"
+    LOG_RESOURCE_ATTRIBUTE = "log_resource_attribute"
+
+
 class LogSeverityLevel(StrEnum):
     TRACE = "trace"
     DEBUG = "debug"
@@ -2670,7 +2676,10 @@ class PropertyFilterType(StrEnum):
     REVENUE_ANALYTICS = "revenue_analytics"
     FLAG = "flag"
     LOG = "log"
+    LOG_ATTRIBUTE = "log_attribute"
+    LOG_RESOURCE_ATTRIBUTE = "log_resource_attribute"
     WORKFLOW_VARIABLE = "workflow_variable"
+    EMPTY = "empty"
 
 
 class PropertyMathType(StrEnum):
@@ -2709,29 +2718,6 @@ class PropertyOperator(StrEnum):
     NOT_IN = "not_in"
     IS_CLEANED_PATH_EXACT = "is_cleaned_path_exact"
     FLAG_EVALUATES_TO = "flag_evaluates_to"
-
-    def is_negative(self):
-        return self in [
-            PropertyOperator.IS_NOT,
-            PropertyOperator.NOT_ICONTAINS,
-            PropertyOperator.NOT_REGEX,
-            PropertyOperator.IS_NOT_SET,
-            PropertyOperator.NOT_BETWEEN,
-            PropertyOperator.NOT_IN,
-        ]
-
-    def to_non_negative(self):
-        if not self.is_negative():
-            return self
-
-        return {
-            PropertyOperator.IS_NOT: PropertyOperator.EXACT,
-            PropertyOperator.NOT_ICONTAINS: PropertyOperator.ICONTAINS,
-            PropertyOperator.NOT_REGEX: PropertyOperator.REGEX,
-            PropertyOperator.IS_NOT_SET: PropertyOperator.IS_SET,
-            PropertyOperator.NOT_BETWEEN: PropertyOperator.BETWEEN,
-            PropertyOperator.NOT_IN: PropertyOperator.IN_,
-        }[self]
 
 
 class Mark(BaseModel):
@@ -3381,7 +3367,9 @@ class TaxonomicFilterGroupType(StrEnum):
     NOTEBOOKS = "notebooks"
     LOG_ENTRIES = "log_entries"
     ERROR_TRACKING_ISSUES = "error_tracking_issues"
+    LOGS = "logs"
     LOG_ATTRIBUTES = "log_attributes"
+    LOG_RESOURCE_ATTRIBUTES = "log_resource_attributes"
     REPLAY = "replay"
     REVENUE_ANALYTICS_PROPERTIES = "revenue_analytics_properties"
     RESOURCES = "resources"
@@ -3389,6 +3377,7 @@ class TaxonomicFilterGroupType(StrEnum):
     ACTIVITY_LOG_PROPERTIES = "activity_log_properties"
     MAX_AI_CONTEXT = "max_ai_context"
     WORKFLOW_VARIABLES = "workflow_variables"
+    EMPTY = "empty"
 
 
 class TestSetupRequest(BaseModel):
@@ -4914,12 +4903,6 @@ class LogMessage(BaseModel):
     timestamp: AwareDatetime
     trace_id: str
     uuid: str
-
-
-class LogPropertyFilterType(StrEnum):
-    LOG = "log"
-    ATTRIBUTE = "log_attribute"
-    RESOURCE_ATTRIBUTE = "log_resource_attribute"
 
 
 class LogPropertyFilter(BaseModel):
