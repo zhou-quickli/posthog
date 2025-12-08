@@ -182,6 +182,7 @@ class TrendsActorsQueryBuilder:
             select=[
                 ast.Field(chain=["actor_id"]),
                 ast.Alias(alias="event_count", expr=self._get_actor_value_expr()),
+                ast.Alias(alias="last_seen", expr=self._get_last_seen_expr()),
                 *self._get_event_distinct_ids_expr(),
                 *self._get_matching_recordings_expr(),
             ],
@@ -248,6 +249,9 @@ class TrendsActorsQueryBuilder:
 
     def _get_actor_value_expr(self) -> ast.Expr:
         return parse_expr("count()")
+
+    def _get_last_seen_expr(self) -> ast.Expr:
+        return parse_expr("max(timestamp)")
 
     def _get_matching_recordings_expr(self) -> list[ast.Expr]:
         if not self.include_recordings:
