@@ -312,9 +312,11 @@ def cleanup_stale_expiry_tracking() -> int:
     removed = cleanup_generic(FLAGS_CACHE_EXPIRY_CONFIG)
 
     if removed > 0:
-        TOMBSTONE_COUNTER.labels(namespace="flags", operation="stale_expiry_tracking", component="flags_cache").inc(
-            removed
-        )
+        TOMBSTONE_COUNTER.labels(
+            namespace="flags",
+            operation="stale_expiry_tracking",
+            component="flags_cache",
+        ).inc(removed)
 
     return removed
 
