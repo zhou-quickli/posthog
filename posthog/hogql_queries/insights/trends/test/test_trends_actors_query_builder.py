@@ -164,11 +164,11 @@ class TestTrendsActorsQueryBuilder(BaseTest):
             expr for expr in query.select if isinstance(expr, ast.Alias) and expr.alias == "last_seen"
         )
         # The expr should be a Call node with name 'max'
-        self.assertIsInstance(last_seen_expr.expr, ast.Call)
+        assert isinstance(last_seen_expr.expr, ast.Call)  # Using `assert` because of type narrowing
         self.assertEqual(last_seen_expr.expr.name, "max")
         # And it should have timestamp as argument
         self.assertEqual(len(last_seen_expr.expr.args), 1)
-        self.assertIsInstance(last_seen_expr.expr.args[0], ast.Field)
+        assert isinstance(last_seen_expr.expr.args[0], ast.Field)
         self.assertEqual(last_seen_expr.expr.args[0].chain, ["timestamp"])
 
     def test_date_range_compare_to(self):
