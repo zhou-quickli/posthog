@@ -22,13 +22,16 @@ pub fn report_internal_error_metrics(
     err_type: &'static str,
     stage_tag: &'static str,
     capture_mode: &'static str,
+    role: &str, // from config.otel_service_name; should map to k8s "role" label in prod
 ) {
-    let tags = [
-        ("error", err_type),
-        ("stage", stage_tag),
-        ("mode", capture_mode),
-    ];
-    counter!("capture_error_by_stage_and_type", &tags).increment(1);
+    counter!(
+        "capture_error_by_stage_and_type",
+        "error" => err_type,
+        "stage" => stage_tag,
+        "mode" => capture_mode,
+        "role" => role.to_string()
+    )
+    .increment(1);
 }
 
 pub fn setup_metrics_recorder() -> PrometheusHandle {

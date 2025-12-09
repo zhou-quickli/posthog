@@ -77,6 +77,7 @@ pub struct Config {
     #[envconfig(default = "1.0")]
     pub otel_sampling_rate: f64,
 
+    // should always map to k8s "role" label in production deployments
     #[envconfig(default = "capture")]
     pub otel_service_name: String,
 

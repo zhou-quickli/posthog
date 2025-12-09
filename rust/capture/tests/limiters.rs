@@ -138,6 +138,7 @@ async fn setup_router_with_limits(
         0.0,         // verbose_sample_percent
         26_214_400,  // ai_max_sum_of_parts_bytes (25MB)
         Some(10),    // request_timeout_seconds
+        "capture".to_string(),
     );
 
     (app, sink)
@@ -1137,6 +1138,7 @@ async fn test_survey_quota_cross_batch_first_submission_allowed() {
         0.0,
         26_214_400,
         Some(10), // request_timeout_seconds
+        "capture".to_string(),
     );
 
     let client = TestClient::new(app);
@@ -1213,6 +1215,7 @@ async fn test_survey_quota_cross_batch_duplicate_submission_dropped() {
         0.0,
         26_214_400,
         Some(10), // request_timeout_seconds
+        "capture".to_string(),
     );
 
     let client = TestClient::new(app);
@@ -1293,6 +1296,7 @@ async fn test_survey_quota_cross_batch_redis_error_fail_open() {
         0.0,
         26_214_400,
         Some(10), // request_timeout_seconds
+        "capture".to_string(),
     );
 
     let client = TestClient::new(app);
@@ -1710,6 +1714,7 @@ async fn test_ai_quota_cross_batch_redis_error_fail_open() {
         0.0,
         26_214_400,
         Some(10), // request_timeout_seconds
+        "capture".to_string(),
     );
 
     let client = TestClient::new(app);

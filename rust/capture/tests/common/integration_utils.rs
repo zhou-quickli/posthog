@@ -994,6 +994,7 @@ fn setup_capture_router(unit: &TestCase) -> (Router, MemorySink) {
             verbose_sample_percent,
             26_214_400, // 25MB default for AI endpoint
             Some(10),   // request_timeout_seconds
+            "capture".to_string(),
         ),
         sink,
     )

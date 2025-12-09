@@ -67,6 +67,7 @@ pub async fn event(
                 err.to_metric_tag(),
                 "parsing",
                 state.capture_mode.as_tag(),
+                &state.role,
             );
             error!("event: request payload parsing error: {:?}", err);
             Err(err)
@@ -87,6 +88,7 @@ pub async fn event(
                     err.to_metric_tag(),
                     "processing",
                     state.capture_mode.as_tag(),
+                    &state.role,
                 );
                 warn!("event: rejected payload: {}", err);
                 return Err(err);
@@ -140,6 +142,7 @@ pub async fn recording(
                 err.to_metric_tag(),
                 "parsing",
                 state.capture_mode.as_tag(),
+                &state.role,
             );
             error!("recordings: request payload parsing error: {:?}", err);
             Err(err)
@@ -152,6 +155,7 @@ pub async fn recording(
                     err.to_metric_tag(),
                     "processing",
                     state.capture_mode.as_tag(),
+                    &state.role,
                 );
                 warn!("recordings:rejected payload: {:?}", err);
                 return Err(err);

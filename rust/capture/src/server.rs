@@ -200,6 +200,7 @@ where
         config.verbose_sample_percent,
         config.ai_max_sum_of_parts_bytes,
         config.request_timeout_seconds,
+        config.otel_service_name.clone(),
     );
 
     // run our app with hyper

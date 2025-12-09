@@ -41,6 +41,7 @@ pub struct State {
     pub is_mirror_deploy: bool,
     pub verbose_sample_percent: f32,
     pub ai_max_sum_of_parts_bytes: usize,
+    pub role: String,
 }
 
 #[derive(Clone)]
@@ -101,6 +102,7 @@ pub fn router<
     verbose_sample_percent: f32,
     ai_max_sum_of_parts_bytes: usize,
     request_timeout_seconds: Option<u64>,
+    role: String,
 ) -> Router {
     let state = State {
         sink: Arc::new(sink),
@@ -117,6 +119,7 @@ pub fn router<
         is_mirror_deploy,
         verbose_sample_percent,
         ai_max_sum_of_parts_bytes,
+        role,
     };
 
     // Very permissive CORS policy, as old SDK versions
