@@ -14,8 +14,9 @@ const BAR_HEIGHT = 52
 
 export function ProductToursEditingBar(): JSX.Element | null {
     const { theme } = useValues(toolbarLogic)
-    const { selectedTourId, tourForm, inspectingElement, isEditingStep } = useValues(productToursLogic)
-    const { selectTour, addStep, editStep, inspectForElementWithIndex, setTourFormValue } =
+    const { selectedTourId, tourForm, inspectingElement, isEditingStep, tourFormHasErrors } =
+        useValues(productToursLogic)
+    const { selectTour, addStep, editStep, inspectForElementWithIndex, setTourFormValue, saveTour } =
         useActions(productToursLogic)
     const themeProps = { theme } as { theme?: string }
 
@@ -123,12 +124,15 @@ export function ProductToursEditingBar(): JSX.Element | null {
                     size="small"
                     type="primary"
                     icon={<IconCheck />}
-                    onClick={() => {
-                        // TODO: Save tour when backend is connected
-                        selectTour(null)
-                    }}
+                    onClick={() => saveTour()}
                     disabledReason={
-                        !tourForm?.name ? 'Name your tour first' : stepCount === 0 ? 'Add at least one step' : undefined
+                        tourFormHasErrors
+                            ? 'Fix errors first'
+                            : !tourForm?.name
+                              ? 'Name your tour first'
+                              : stepCount === 0
+                                ? 'Add at least one step'
+                                : undefined
                     }
                 >
                     Save
